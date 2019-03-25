@@ -3,6 +3,7 @@
 const { Observable } = require('rxjs');
 const { map } = require('rxjs/operators');
 const { merge, interval } = require('rxjs');
+const { fromEvent } = require('rxjs');
 
 // - Lodash (https://github.com/lodash/lodash)
 const _ = require('lodash');
@@ -34,3 +35,10 @@ const initialGame = () => ({
 })
 
 const updateGame = lasers => ({ lasers });
+
+//create observable that emits click events
+const source = fromEvent(document, 'keydown');
+//map to string with given event timestamp
+const example = source.pipe(map(event => `Event: ${event}`));
+//output (example): 'Event time: 7276.390000000001'
+const subscribe = example.subscribe(val => console.log(val));
