@@ -36,9 +36,13 @@ const initialGame = () => ({
 
 const updateGame = lasers => ({ lasers });
 
+const keyInput = function(event){
+  return event.keycode || event.which;
+}
+
 //create observable that emits click events
 const source = fromEvent(document, 'keydown');
 //map to string with given event timestamp
-const example = source.pipe(map(event => `Event: ${event}`));
+const example = source.pipe(map(event => `Event: ${keyInput(event)}`));
 //output (example): 'Event time: 7276.390000000001'
 const subscribe = example.subscribe(val => console.log(val));
