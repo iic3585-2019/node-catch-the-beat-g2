@@ -1,9 +1,11 @@
 {
   "scripts": {
-    "build": "webpack"
+    "serve": "webpack-dev-server",
+    "build": "webpack --mode=development"
   },
   "dependencies": {
     "lodash": "^4.17.11",
+    "paper": "^0.12.0",
     "rxjs": "^6.4.0"
   },
   "devDependencies": {

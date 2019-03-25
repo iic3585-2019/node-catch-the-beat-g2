@@ -1,17 +1,22 @@
 // External modules:
-// - RxJS (https://github.com/ReactiveX/rxjs)
-const { Observable } = require('rxjs');
-const { map } = require('rxjs/operators');
-const { merge, interval } = require('rxjs');
-const { fromEvent } = require('rxjs');
-
 // - Lodash (https://github.com/lodash/lodash)
 const _ = require('lodash');
 
-// Internal modules:
-const { paint } = require('./render');
+// - Paper (https://github.com/paperjs/paper.js)
+const paper = require('paper');
 
-const MAP_SIZE = 500;
+// - ReactiveX (https://github.com/ReactiveX/rxjs)
+const { Observable } = require('rxjs');
+const { fromEvent, interval, merge } = require('rxjs');
+const { map, scan } = require('rxjs/operators');
+
+// Internal modules:
+// - Render
+const { render, setup } = require('./render');
+
+// =============================================================================
+const MAP_SIZE = 1024;
+// =============================================================================
 
 const buildLaser = (mapSize) => {
   const [p1, p2] = _.sampleSize([
@@ -25,28 +30,24 @@ const buildLaser = (mapSize) => {
 }
 
 const buildLaserObservable = (ms, mapSize) => {
-  return interval(ms).pipe(map(() => buildLaser(mapSize)));
+  return interval(ms).pipe(map(() => buildLaser(mapSize)), scan((prev, value) => [value], []));
 }
 
-const lasers$ = buildLaserObservable(500, MAP_SIZE);
+window.onload = () => {
+  setup();
 
-const initialGame = () => ({
-  players: [
-    { x: 0, y: 0 },
-    { x: 0, y: 0 },
-  ],
-  lasers: []
-})
+  const lasers$ = buildLaserObservable(500, MAP_SIZE);
 
-const updateGame = lasers => ({ lasers });
+  const state$ = lasers$.pipe((map((lasers) => {
+    return {
+      size: MAP_SIZE,
+      players: [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+      ],
+      lasers,
+    }
+  })));
 
-const keyInput = function(event){
-  return event.keycode || event.which;
+  state$.subscribe(render)
 }
-
-//create observable that emits click events
-const source = fromEvent(document, 'keydown');
-//map to string with given event timestamp
-const example = source.pipe(map(event => `Event: ${keyInput(event)}`));
-//output (example): 'Event time: 7276.390000000001'
-const subscribe = example.subscribe(val => console.log(val));
