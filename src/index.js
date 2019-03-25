@@ -31,6 +31,10 @@ const buildLaserObservable = (ms, mapSize) => {
 const lasers$ = buildLaserObservable(500, MAP_SIZE);
 
 const initialGame = () => ({
+  players: [
+    { x: 0, y: 0 },
+    { x: 0, y: 0 },
+  ],
   lasers: []
 })
 
