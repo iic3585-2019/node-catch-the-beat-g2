@@ -7,7 +7,7 @@ const paper = require('paper');
 
 // - ReactiveX (https://github.com/ReactiveX/rxjs)
 const { Observable } = require('rxjs');
-const { fromEvent, interval, merge, combineLatest } = require('rxjs');
+const { fromEvent, of, from, interval, merge, combineLatest } = require('rxjs');
 const { filter, map, scan } = require('rxjs/operators');
 
 // Internal modules:
@@ -15,78 +15,79 @@ const { filter, map, scan } = require('rxjs/operators');
 const { render, setup } = require('./render');
 
 // =============================================================================
+const ACCELERATION = 5;
 const BOX_SIZE = [1280, 720];
-const move = 5;
+const TIME = 50;
+
+const PLAYER_0_KEY_CODES = [38, 40, 37, 39];
+const PLAYER_1_KEY_CODES = [87, 83, 65, 68];
 // =============================================================================
 
-const moves = {
-  up: (player, move) => {
+const MOVES = {
+  up: (player, speed) => {
     return {
-      x: player.x,
-      y: player.y - move,
+      ...player,
+      vY: player.vY - speed,
     };
   },
-  down: (player, move) => {
+  down: (player, speed) => {
     return {
-      x: player.x,
-      y: player.y + move,
+      ...player,
+      vY: player.vY + speed,
     };
   },
-  left: (player, move) => {
+  left: (player, speed) => {
     return {
-      x: player.x - move,
-      y: player.y,
+      ...player,
+      vX: player.vX - speed,
     };
   },
-  right: (player, move) => {
+  right: (player, speed) => {
     return {
-      x: player.x + move,
-      y: player.y,
+      ...player,
+      vX: player.vX + speed,
     };
   },
 }
 
-const keys = {
+const KEYS = {
   up: {
-    number: 38,
-    move: moves.up,
+    code: 38,
+    handler: MOVES.up,
   },
   down: {
-    number: 40,
-    move: moves.down,
+    code: 40,
+    handler: MOVES.down,
   },
   left: {
-    number: 37,
-    move: moves.left,
+    code: 37,
+    handler: MOVES.left,
   },
   right: {
-    number: 39,
-    move: moves.right,
+    code: 39,
+    handler: MOVES.right,
   },
   w: {
-    number: 87,
-    move: moves.up,
+    code: 87,
+    handler: MOVES.up,
   },
   s: {
-    number: 83,
-    move: moves.down,
+    code: 83,
+    handler: MOVES.down,
   },
   a: {
-    number: 65,
-    move: moves.left,
+    code: 65,
+    handler: MOVES.left,
   },
   d: {
-    number: 68,
-    move: moves.right,
+    code: 68,
+    handler: MOVES.right,
   },
 }
 
-const player1Move = [38, 40, 37, 39];
-const player2Move = [87, 83, 65, 68];
+const getKeyCode = (event) => event.keycode || event.which;
 
-const keyInput = (event) => event.keycode || event.which;
-
-const buildLaser = (boxSize) => {
+const buildRandomLaser = (boxSize) => {
   const [p1, p2] = _.sampleSize([
     { x: 0, y: _.random(boxSize[1]) },
     { x: _.random(boxSize[0]), y: 0 },
@@ -97,57 +98,71 @@ const buildLaser = (boxSize) => {
   return { p1, p2 };
 }
 
-const buildLaserObservable = (ms, boxSize) => {
-  return interval(ms).pipe(map(() => buildLaser(boxSize)), scan((prev, value) => [value], []));
-}
-
 const buildPlayersObservable = (players) => {
   const source = fromEvent(document, 'keydown');
 
-  return source.pipe(map(event => keyInput(event)),
-    filter(numberKey => player1Move.includes(numberKey) || player2Move.includes(numberKey)),
-    scan((prevPlayers, numberKey) => {
-      for (let key in keys) {
-        if (numberKey === keys[key].number) {
-          if (player1Move.includes(keys[key].number)) {
-            // console.log(`${prevPlayers[0].x}, ${prevPlayers[0].y}`)
+  return source.pipe(map(event => getKeyCode(event)),
+    filter(keyCode => PLAYER_0_KEY_CODES.includes(keyCode) || PLAYER_1_KEY_CODES.includes(keyCode)),
+    scan((prev, keyCode) => {
+      const key = _.find(KEYS, (k) => k.code === keyCode);
 
-            return [keys[key].move(prevPlayers[0], move), { x: prevPlayers[1].x, y: prevPlayers[1].y }];
-          }
-          else {
-            return [{ x: prevPlayers[0].x, y: prevPlayers[0].y }, keys[key].move(prevPlayers[1], move)];
-          }
-        }
+      if (PLAYER_0_KEY_CODES.includes(key.code)) {
+        return [key.handler(prev[0], ACCELERATION), { ...prev[1] }];
+      } else {
+        return [{ ...prev[0] }, key.handler(prev[1], ACCELERATION)];
       }
     }, players)
   );
 }
 
+const buildLaserObservable = (ms, boxSize) => {
+  return interval(ms).pipe(map(() => buildRandomLaser(boxSize)), scan((prev, value) => [value], []));
+}
+
+const buildCollisionsObservable = () => {
+  return fromEvent(document, 'collision');
+}
+
+const buildDeathsObservable = () => {
+  return fromEvent(document, 'death').pipe(scan((prev, value) => {
+    if (!value) return prev;
+
+    const deaths = [...prev];
+    deaths[value] += 1;
+
+    return deaths;
+  }, [0, 0]));
+}
+
+const buildTimeObservable = (ms) => {
+  return interval(ms);
+}
+
 window.onload = () => {
   setup();
 
-  const lasers$ = buildLaserObservable(500, BOX_SIZE);
-  const players$ = buildPlayersObservable(
-    [
-      { x: 400, y: 400 },
-      { x: 400, y: 400 },
-    ]
-  );
+  const players$ = buildPlayersObservable([
+    { x: 400, y: 400, vX: 0, vY: 0 },
+    { x: 400, y: 400, vX: 0, vY: 0 },
+  ]);
+  const lasers$ = buildLaserObservable(250, BOX_SIZE);
+  const deaths$ = buildDeathsObservable();
+  const time$ = buildTimeObservable(TIME);
 
-  const collisions$ = fromEvent(document, 'collision');
-  collisions$.subscribe(() => console.log('collision'));
+  const state$ = combineLatest(lasers$, players$, time$).pipe(map(([lasers, players, time]) => {
+    const move = (players) => {
+      return players.map(p => {
+        // console.log(`x: ${p.x + p.vX}, y: ${p.y + p.vY}, vX: ${p.vX}, vY: ${p.vY}`);
 
-  const deaths$ = fromEvent(document, 'death');
-  deaths$.subscribe((event) => console.log('death', event.detail.player));
+        return { ...p, x: p.x + p.vX, y: p.y + p.vY }
+      })
+    }
 
-  const state$ = combineLatest(lasers$, players$).pipe((map(([lasers, players]) => {
     return {
-      players,
+      players: move(players),
       lasers,
     }
-  })));
+  }));
 
   state$.subscribe(render)
 }
-
-

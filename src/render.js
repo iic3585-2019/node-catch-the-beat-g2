@@ -47,7 +47,7 @@ const setup = () => {
   paper.setup(canvas);
 }
 
-const render = (state) => {
+const redraw = (state) => {
   paper.project.clear();
 
   _lasers = state.lasers.map(draw.laser);
@@ -64,6 +64,13 @@ const render = (state) => {
   }
 
   paper.view.draw();
+}
+
+const render = (state) => {
+  // document.getElementById('player-0-deaths').innerHTML = state.deaths[0];
+  // document.getElementById('player-1-deaths').innerHTML = state.deaths[1];
+
+  redraw(state);
 }
 
 module.exports = { render, setup }
