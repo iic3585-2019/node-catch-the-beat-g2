@@ -67,8 +67,8 @@ const redraw = (state) => {
 }
 
 const render = (state) => {
-  // document.getElementById('player-0-deaths').innerHTML = state.deaths[0];
-  // document.getElementById('player-1-deaths').innerHTML = state.deaths[1];
+  document.getElementById('player-0-deaths').innerHTML = state.deaths[0];
+  document.getElementById('player-1-deaths').innerHTML = state.deaths[1];
 
   redraw(state);
 }

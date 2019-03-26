@@ -8,7 +8,7 @@ const paper = require('paper');
 // - ReactiveX (https://github.com/ReactiveX/rxjs)
 const { Observable } = require('rxjs');
 const { fromEvent, of, from, interval, merge, combineLatest, zip } = require('rxjs');
-const { filter, map, scan } = require('rxjs/operators');
+const { distinctUntilChanged, filter, map, scan, throttleTime } = require('rxjs/operators');
 
 // Internal modules:
 // - Render
@@ -115,7 +115,7 @@ const buildPlayersObservable = (players) => {
 
     if (current.type === 'down' && !keyboard.includes(current.code))
       keyboard.push(current.code);
-    else if(current.type === 'up') {
+    else if (current.type === 'up') {
       const idx = keyboard.indexOf(current.code);
 
       if (idx >= 0) keyboard.splice(idx, 1);
@@ -138,14 +138,14 @@ const buildCollisionsObservable = () => {
 }
 
 const buildDeathsObservable = () => {
-  return fromEvent(document, 'death').pipe(scan((prev, value) => {
-    if (!value) return prev;
+  return Observable.create((observer) => {
+    observer.next(null);
 
-    const deaths = [...prev];
-    deaths[value] += 1;
-
-    return deaths;
-  }, [0, 0]));
+    fromEvent(document, 'death').subscribe((deathEvent) => {
+      observer.next(deathEvent.detail.player);
+      observer.next(null);
+    })
+  }).pipe(throttleTime(TICKS_MS));
 }
 
 const buildTimeObservable = (ms) => {
@@ -163,24 +163,30 @@ window.onload = () => {
   const deaths$ = buildDeathsObservable();
   const time$ = buildTimeObservable(TICKS_MS);
 
-  const state$ = combineLatest(laser$, players$, time$).pipe(
+  const state$ = combineLatest(laser$, players$, time$, deaths$).pipe(
     scan(
-      (prevState, [laser, keyCodes, time]) => {
-        const accelerate = (players) => {
-          const movesPlayer0 = keyCodes.filter( (keyCode) => PLAYER_0_KEY_CODES.includes(keyCode)).map((keyCode) => 
-          _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
+      (prevState, [laser, keyCodes, time, deathIdx]) => {
+        const deaths = [...prevState.deaths];
 
-          const movesPlayer1 = keyCodes.filter( (keyCode) => PLAYER_1_KEY_CODES.includes(keyCode)).map((keyCode) => 
-          _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
+        if (typeof deathIdx !== 'null') {
+          deaths[deathIdx] += 1;
+        }
+
+        const accelerate = (players) => {
+          const movesPlayer0 = keyCodes.filter((keyCode) => PLAYER_0_KEY_CODES.includes(keyCode)).map((keyCode) =>
+            _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
+
+          const movesPlayer1 = keyCodes.filter((keyCode) => PLAYER_1_KEY_CODES.includes(keyCode)).map((keyCode) =>
+            _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
 
           return [movesPlayer0.reduce(
             (prevPlayer, _function) => {
               return _function(prevPlayer, ACCELERATION)
             }, players[0]),
-            movesPlayer1.reduce(
-              (prevPlayer, _function) => {
-                return _function(prevPlayer, ACCELERATION)
-              }, players[1])]
+          movesPlayer1.reduce(
+            (prevPlayer, _function) => {
+              return _function(prevPlayer, ACCELERATION)
+            }, players[1])]
         };
 
         const decelerate = (players) => {
@@ -203,7 +209,8 @@ window.onload = () => {
             const newPossibleX = p.x + p.vX
             const newX = 0 <= newPossibleX && newPossibleX <= BOX_SIZE[0] ? newPossibleX : p.x;
             const newPossibleY = p.y + p.vY
-            const newY = 0 <= newPossibleY && newPossibleY<= BOX_SIZE[1] ? newPossibleY : p.y;
+            const newY = 0 <= newPossibleY && newPossibleY <= BOX_SIZE[1] ? newPossibleY : p.y;
+
             return { ...p, x: newX, y: newY };
           })
         }
@@ -212,6 +219,7 @@ window.onload = () => {
           ...prevState,
           players: move(decelerate(accelerate(prevState.players))),
           lasers: [laser],
+          deaths,
         };
       },
       {
@@ -220,9 +228,10 @@ window.onload = () => {
           { x: 400, y: 400, vX: 0, vY: 0 },
         ],
         lasers: [],
+        deaths: [0, 0],
       }
     )
   );
 
-  state$.subscribe(render)
+  state$.pipe(distinctUntilChanged(_.isEqual)).subscribe(render)
 }
