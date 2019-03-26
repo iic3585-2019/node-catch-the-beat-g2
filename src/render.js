@@ -11,12 +11,16 @@ const COLORS = {
 const R = 20;
 // =============================================================================
 
+const EVENTS = {
+  COLLISION: (event) => new CustomEvent('collision', { detail: event }),
+  DEATH: (event) => new CustomEvent('death', { detail: event }),
+}
+
 const draw = {
   player: player => {
     const { x, y } = player;
 
     const p = new paper.Point(x, y);
-
     const path = new paper.Path.Circle(p, R);
     path.fillColor = COLORS.PLAYERS[0];
 
@@ -46,8 +50,18 @@ const setup = () => {
 const render = (state) => {
   paper.project.clear();
 
-  state.lasers.forEach(draw.laser);
-  state.players.forEach(draw.player);
+  _lasers = state.lasers.map(draw.laser);
+  _players = state.players.map(draw.player);
+
+  if (_players[0].intersects(_players[1])) document.dispatchEvent(EVENTS.COLLISION());
+
+  for (const [idx, _player] of _players.entries()) {
+    if (_lasers.some((_laser) => _laser.intersects(_player))) {
+      document.dispatchEvent(EVENTS.DEATH({ player: idx }))
+
+      break;
+    }
+  }
 
   paper.view.draw();
 }

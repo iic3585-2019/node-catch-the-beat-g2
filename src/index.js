@@ -15,7 +15,7 @@ const { filter, map, scan } = require('rxjs/operators');
 const { render, setup } = require('./render');
 
 // =============================================================================
-const MAP_SIZE = 1024;
+const BOX_SIZE = [1280, 720];
 const move = 5;
 // =============================================================================
 
@@ -86,19 +86,19 @@ const player2Move = [87, 83, 65, 68];
 
 const keyInput = (event) => event.keycode || event.which;
 
-const buildLaser = (mapSize) => {
+const buildLaser = (boxSize) => {
   const [p1, p2] = _.sampleSize([
-    { x: 0, y: _.random(mapSize - 1) },
-    { x: _.random(mapSize - 1), y: 0 },
-    { x: mapSize - 1, y: _.random(mapSize - 1) },
-    { x: _.random(mapSize - 1), y: mapSize - 1 },
+    { x: 0, y: _.random(boxSize[1]) },
+    { x: _.random(boxSize[0]), y: 0 },
+    { x: _.random(boxSize[0]), y: boxSize[1] },
+    { x: boxSize[0], y: _.random(boxSize[1]) },
   ], 2)
 
   return { p1, p2 };
 }
 
-const buildLaserObservable = (ms, mapSize) => {
-  return interval(ms).pipe(map(() => buildLaser(mapSize)), scan((prev, value) => [value], []));
+const buildLaserObservable = (ms, boxSize) => {
+  return interval(ms).pipe(map(() => buildLaser(boxSize)), scan((prev, value) => [value], []));
 }
 
 const buildPlayersObservable = (players) => {
@@ -110,6 +110,8 @@ const buildPlayersObservable = (players) => {
       for (let key in keys) {
         if (numberKey === keys[key].number) {
           if (player1Move.includes(keys[key].number)) {
+            // console.log(`${prevPlayers[0].x}, ${prevPlayers[0].y}`)
+
             return [keys[key].move(prevPlayers[0], move), { x: prevPlayers[1].x, y: prevPlayers[1].y }];
           }
           else {
@@ -124,8 +126,7 @@ const buildPlayersObservable = (players) => {
 window.onload = () => {
   setup();
 
-
-  const lasers$ = buildLaserObservable(500, MAP_SIZE);
+  const lasers$ = buildLaserObservable(500, BOX_SIZE);
   const players$ = buildPlayersObservable(
     [
       { x: 400, y: 400 },
@@ -133,9 +134,14 @@ window.onload = () => {
     ]
   );
 
+  const collisions$ = fromEvent(document, 'collision');
+  collisions$.subscribe(() => console.log('collision'));
+
+  const deaths$ = fromEvent(document, 'death');
+  deaths$.subscribe((event) => console.log('death', event.detail.player));
+
   const state$ = combineLatest(lasers$, players$).pipe((map(([lasers, players]) => {
     return {
-      size: MAP_SIZE,
       players,
       lasers,
     }

@@ -3,11 +3,21 @@
 
 <head>
   <title>Insane Lasers</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Lato:900" rel="stylesheet">
 </head>
 
 <body>
   <div id="app">
-    <canvas id="canvas" resize />
+    <div class="stats">
+      <strong> 0 </strong>
+
+      <strong> 0 </strong>
+    </div>
+
+    <div class="canvas-wrapper">
+      <canvas id="canvas" />
+    </div>
   </div>
 
   <script type="text/javascript" src="dist/main.js"></script>
@@ -25,6 +35,7 @@
 
   #app {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 
@@ -32,8 +43,27 @@
     height: 100vh;
   }
 
+  .canvas-wrapper {
+    width: 1280px;
+    height: 720px;
+
+    box-shadow: 0px 2px 1px -1px rgba(0, 0, 0, 0.2), 0px 1px 1px 0px rgba(0, 0, 0, 0.14), 0px 1px 3px 0px rgba(0, 0, 0, 0.12);
+  }
+
   #canvas {
-    width: 1024px;
-    height: 1024px;
+    width: 1280px;
+    height: 720px;
+  }
+
+  .stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+
+    font-family: 'Lato';
+    font-size: 2rem;
+
+    width: 100%;
+    margin-bottom: 48px;
   }
 </style>
