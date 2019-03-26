@@ -18,7 +18,7 @@ const { render, setup } = require('./render');
 const BOX_SIZE = [1280, 720];
 const ACCELERATION = 2;
 const DECELERATION = 1;
-const TICKS_MS = 250;
+const TICKS_MS = 10;
 
 const PLAYER_0_KEY_CODES = [38, 40, 37, 39];
 const PLAYER_1_KEY_CODES = [87, 83, 65, 68];
@@ -88,15 +88,6 @@ const KEYS = {
 
 const getKeyCode = (event) => event.keycode || event.which;
 
-const keyDownSource = fromEvent(document, 'keydown');
-const keydokwn = keyDownSource.pipe(map(event => keyInput(event)),
-  map(keyNumber => {
-    return {
-      key: keyNumber,
-      type: 'down'
-    }
-  }));
-
 const buildRandomLaser = (boxSize) => {
   const [p1, p2] = _.sampleSize([
     { x: 0, y: _.random(boxSize[1]) },
@@ -122,10 +113,10 @@ const buildPlayersObservable = (players) => {
   const keyboard$ = merge(keyup$, keydown$).pipe(scan((prevKeyboard, current) => {
     const keyboard = [...prevKeyboard];
 
-    if (current.type === 'down' && !keyboard.includes(current.key))
-      keyboard.push(current.key);
-    else {
-      const idx = keyboard.indexOf(current.key);
+    if (current.type === 'down' && !keyboard.includes(current.code))
+      keyboard.push(current.code);
+    else if(current.type === 'up') {
+      const idx = keyboard.indexOf(current.code);
 
       if (idx >= 0) keyboard.splice(idx, 1);
     }
@@ -133,7 +124,7 @@ const buildPlayersObservable = (players) => {
     return keyboard;
   }, []))
 
-  const isPlayerKeyCode = keyCode => PLAYER_0_KEY_CODES.includes(keyCode) || PLAYER_1_KEY_CODES.includes(keyCode));
+  const isPlayerKeyCode = keyCode => PLAYER_0_KEY_CODES.includes(keyCode) || PLAYER_1_KEY_CODES.includes(keyCode);
 
   return keyboard$.pipe(map(keyCodes => keyCodes.filter(isPlayerKeyCode)));
 }
@@ -176,13 +167,20 @@ window.onload = () => {
     scan(
       (prevState, [laser, keyCodes, time]) => {
         const accelerate = (players) => {
-          // const key = _.find(KEYS, (k) => k.code === keyCode);
+          const movesPlayer0 = keyCodes.filter( (keyCode) => PLAYER_0_KEY_CODES.includes(keyCode)).map((keyCode) => 
+          _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
 
-          // if (PLAYER_0_KEY_CODES.includes(key.code)) {
-          //   return [key.handler(players[0], ACCELERATION), { ...players[1] }];
-          // } else {
-          //   return [{ ...players[0] }, key.handler(players[1], ACCELERATION)];
-          // }
+          const movesPlayer1 = keyCodes.filter( (keyCode) => PLAYER_1_KEY_CODES.includes(keyCode)).map((keyCode) => 
+          _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
+
+          return [movesPlayer0.reduce(
+            (prevPlayer, _function) => {
+              return _function(prevPlayer, ACCELERATION)
+            }, players[0]),
+            movesPlayer1.reduce(
+              (prevPlayer, _function) => {
+                return _function(prevPlayer, ACCELERATION)
+              }, players[1])]
         };
 
         const decelerate = (players) => {
@@ -202,7 +200,11 @@ window.onload = () => {
 
         const move = (players) => {
           return players.map(p => {
-            return { ...p, x: p.x + p.vX, y: p.y + p.vY }
+            const newPossibleX = p.x + p.vX
+            const newX = 0 <= newPossibleX && newPossibleX <= BOX_SIZE[0] ? newPossibleX : p.x;
+            const newPossibleY = p.y + p.vY
+            const newY = 0 <= newPossibleY && newPossibleY<= BOX_SIZE[1] ? newPossibleY : p.y;
+            return { ...p, x: newX, y: newY };
           })
         }
 
