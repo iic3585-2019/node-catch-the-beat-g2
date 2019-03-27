@@ -7,14 +7,24 @@ const paper = require('paper');
 
 // - ReactiveX (https://github.com/ReactiveX/rxjs)
 const { Observable } = require('rxjs');
-const { fromEvent, of, from, interval, merge, combineLatest, zip } = require('rxjs');
-const { distinctUntilChanged, filter, map, scan, throttleTime } = require('rxjs/operators');
+const {
+  combineLatest,
+  fromEvent,
+  interval,
+  merge,
+} = require('rxjs');
+const {
+  distinctUntilChanged,
+  map,
+  scan,
+  throttleTime,
+} = require('rxjs/operators');
 
 // Internal modules:
 // - Render
 const { render, setup } = require('./render');
 
-// =============================================================================
+// Constants ===================================================================
 const BOX_SIZE = [1280, 720];
 const ACCELERATION = 2;
 const DECELERATION = 1;
@@ -22,7 +32,6 @@ const TICKS_MS = 10;
 
 const PLAYER_0_KEY_CODES = [38, 40, 37, 39];
 const PLAYER_1_KEY_CODES = [87, 83, 65, 68];
-// =============================================================================
 
 const MOVES = {
   up: (player, speed) => {
@@ -49,7 +58,7 @@ const MOVES = {
       vX: player.vX + speed,
     };
   },
-}
+};
 
 const KEYS = {
   up: {
@@ -84,112 +93,125 @@ const KEYS = {
     code: 68,
     handler: MOVES.right,
   },
-}
+};
+// =============================================================================
 
-const getKeyCode = (event) => event.keycode || event.which;
+// Observables =================================================================
+const buildPlayersKeyboardObservable = () => {
+  const getKeyCode = event => event.keycode || event.which;
 
-const buildRandomLaser = (boxSize) => {
-  const [p1, p2] = _.sampleSize([
-    { x: 0, y: _.random(boxSize[1]) },
-    { x: _.random(boxSize[0]), y: 0 },
-    { x: _.random(boxSize[0]), y: boxSize[1] },
-    { x: boxSize[0], y: _.random(boxSize[1]) },
-  ], 2)
-
-  return { p1, p2 };
-}
-
-const buildPlayersObservable = (players) => {
   const keydown$ = fromEvent(document, 'keydown').pipe(
     map(getKeyCode),
-    map(keyCode => ({ code: keyCode, type: 'down' })),
+    map(keyCode => ({ code: keyCode, type: 'down' }))
   );
 
   const keyup$ = fromEvent(document, 'keyup').pipe(
     map(getKeyCode),
-    map(keyCode => ({ code: keyCode, type: 'up' })),
+    map(keyCode => ({ code: keyCode, type: 'up' }))
   );
 
-  const keyboard$ = merge(keyup$, keydown$).pipe(scan((prevKeyboard, current) => {
-    const keyboard = [...prevKeyboard];
+  const keyboard$ = merge(keyup$, keydown$).pipe(
+    scan((prevKeyboard, current) => {
+      const keyboard = [...prevKeyboard];
 
-    if (current.type === 'down' && !keyboard.includes(current.code))
-      keyboard.push(current.code);
-    else if (current.type === 'up') {
-      const idx = keyboard.indexOf(current.code);
+      if (current.type === 'down' && !keyboard.includes(current.code))
+        keyboard.push(current.code);
+      else if (current.type === 'up') {
+        const idx = keyboard.indexOf(current.code);
 
-      if (idx >= 0) keyboard.splice(idx, 1);
-    }
+        if (idx >= 0) keyboard.splice(idx, 1);
+      }
 
-    return keyboard;
-  }, []))
+      return keyboard;
+    }, [])
+  );
 
-  const isPlayerKeyCode = keyCode => PLAYER_0_KEY_CODES.includes(keyCode) || PLAYER_1_KEY_CODES.includes(keyCode);
+  const isPlayerKeyCode = keyCode =>
+    PLAYER_0_KEY_CODES.includes(keyCode) ||
+    PLAYER_1_KEY_CODES.includes(keyCode);
 
   return keyboard$.pipe(map(keyCodes => keyCodes.filter(isPlayerKeyCode)));
-}
+};
 
 const buildLaserObservable = (ms, boxSize) => {
+  const buildRandomLaser = boxSize => {
+    const [p1, p2] = _.sampleSize(
+      [
+        { x: 0, y: _.random(boxSize[1]) },
+        { x: _.random(boxSize[0]), y: 0 },
+        { x: _.random(boxSize[0]), y: boxSize[1] },
+        { x: boxSize[0], y: _.random(boxSize[1]) },
+      ],
+      2
+    );
+
+    return { p1, p2 };
+  };
+
   return interval(ms).pipe(map(() => buildRandomLaser(boxSize)));
-}
+};
 
 const buildCollisionsObservable = () => {
   return fromEvent(document, 'collision');
-}
+};
 
 const buildDeathsObservable = () => {
-  return Observable.create((observer) => {
+  return Observable.create(observer => {
     observer.next(null);
 
-    fromEvent(document, 'death').subscribe((deathEvent) => {
+    fromEvent(document, 'death').subscribe(deathEvent => {
       observer.next(deathEvent.detail.player);
       observer.next(null);
-    })
+    });
   }).pipe(throttleTime(TICKS_MS));
-}
+};
 
-const buildTimeObservable = (ms) => {
+const buildTimeObservable = ms => {
   return interval(ms);
-}
+};
+// =============================================================================
 
 window.onload = () => {
   setup();
 
-  const players$ = buildPlayersObservable([
-    { x: 400, y: 400, vX: 0, vY: 0 },
-    { x: 400, y: 400, vX: 0, vY: 0 },
-  ]);
-  const laser$ = buildLaserObservable(250, BOX_SIZE);
+  const playersKeyboard$ = buildPlayersKeyboardObservable();
+  const lasers$ = buildLaserObservable(250, BOX_SIZE);
   const deaths$ = buildDeathsObservable();
   const time$ = buildTimeObservable(TICKS_MS);
 
-  const state$ = combineLatest(laser$, players$, time$, deaths$).pipe(
+  const state$ = combineLatest(playersKeyboard$, lasers$, deaths$, time$).pipe(
     scan(
-      (prevState, [laser, keyCodes, time, deathIdx]) => {
+      (prevState, [keyCodes, laser, deathPlayer, time]) => {
         const deaths = [...prevState.deaths];
 
-        if (typeof deathIdx !== 'null') {
-          deaths[deathIdx] += 1;
-        }
+        if (deathPlayer !== null) deaths[deathPlayer] += 1;
 
-        const accelerate = (players) => {
-          const movesPlayer0 = keyCodes.filter((keyCode) => PLAYER_0_KEY_CODES.includes(keyCode)).map((keyCode) =>
-            _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
+        const accelerate = players => {
+          const movesPlayer0 = keyCodes
+            .filter(keyCode => PLAYER_0_KEY_CODES.includes(keyCode))
+            .map(
+              keyCode =>
+                _.find(Object.values(KEYS), key => key.code === keyCode).handler
+            );
 
-          const movesPlayer1 = keyCodes.filter((keyCode) => PLAYER_1_KEY_CODES.includes(keyCode)).map((keyCode) =>
-            _.find(Object.values(KEYS), (key) => key.code === keyCode).handler)
+          const movesPlayer1 = keyCodes
+            .filter(keyCode => PLAYER_1_KEY_CODES.includes(keyCode))
+            .map(
+              keyCode =>
+                _.find(Object.values(KEYS), key => key.code === keyCode).handler
+            );
 
-          return [movesPlayer0.reduce(
-            (prevPlayer, _function) => {
-              return _function(prevPlayer, ACCELERATION)
+          return [
+            movesPlayer0.reduce((prevPlayer, _function) => {
+              return _function(prevPlayer, ACCELERATION);
             }, players[0]),
-          movesPlayer1.reduce(
-            (prevPlayer, _function) => {
-              return _function(prevPlayer, ACCELERATION)
-            }, players[1])]
+            movesPlayer1.reduce((prevPlayer, _function) => {
+              return _function(prevPlayer, ACCELERATION);
+            }, players[1]),
+          ];
         };
 
-        const decelerate = (players) => {
+        const decelerate = players => {
           return players.map(p => {
             const decrease = (v, amount) => {
               if (v > 0 && v - amount > 0) return v - amount;
@@ -197,23 +219,33 @@ window.onload = () => {
               else if (v < 0 && v + amount < 0) return v + amount;
               else if (v < 0 && v + amount >= 0) return 0;
 
-              return v
+              return v;
             };
 
-            return { ...p, vX: decrease(p.vX, DECELERATION), vY: decrease(p.vY, DECELERATION) }
-          })
+            return {
+              ...p,
+              vX: decrease(p.vX, DECELERATION),
+              vY: decrease(p.vY, DECELERATION),
+            };
+          });
         };
 
-        const move = (players) => {
+        const move = players => {
           return players.map(p => {
-            const newPossibleX = p.x + p.vX
-            const newX = 0 <= newPossibleX && newPossibleX <= BOX_SIZE[0] ? newPossibleX : p.x;
-            const newPossibleY = p.y + p.vY
-            const newY = 0 <= newPossibleY && newPossibleY <= BOX_SIZE[1] ? newPossibleY : p.y;
+            const newPossibleX = p.x + p.vX;
+            const newX =
+              0 <= newPossibleX && newPossibleX <= BOX_SIZE[0]
+                ? newPossibleX
+                : p.x;
+            const newPossibleY = p.y + p.vY;
+            const newY =
+              0 <= newPossibleY && newPossibleY <= BOX_SIZE[1]
+                ? newPossibleY
+                : p.y;
 
             return { ...p, x: newX, y: newY };
-          })
-        }
+          });
+        };
 
         return {
           ...prevState,
@@ -233,5 +265,5 @@ window.onload = () => {
     )
   );
 
-  state$.pipe(distinctUntilChanged(_.isEqual)).subscribe(render)
-}
+  state$.pipe(distinctUntilChanged(_.isEqual)).subscribe(render);
+};

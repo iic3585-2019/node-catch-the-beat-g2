@@ -6,15 +6,14 @@ const paper = require('paper');
 const COLORS = {
   LASER: '#f44336',
   PLAYERS: ['#9c27b0', '#009688'],
-}
-
+};
 const R = 20;
 // =============================================================================
 
 const EVENTS = {
-  COLLISION: (event) => new CustomEvent('collision', { detail: event }),
-  DEATH: (event) => new CustomEvent('death', { detail: event }),
-}
+  COLLISION: event => new CustomEvent('collision', { detail: event }),
+  DEATH: event => new CustomEvent('death', { detail: event }),
+};
 
 const draw = {
   player: player => {
@@ -38,39 +37,40 @@ const draw = {
     path.strokeWidth = 4;
 
     return path;
-  }
-}
+  },
+};
 
 const setup = () => {
   const canvas = document.getElementById('canvas');
 
   paper.setup(canvas);
-}
+};
 
-const redraw = (state) => {
+const redraw = state => {
   paper.project.clear();
 
   _lasers = state.lasers.map(draw.laser);
   _players = state.players.map(draw.player);
 
-  if (_players[0].intersects(_players[1])) document.dispatchEvent(EVENTS.COLLISION());
+  if (_players[0].intersects(_players[1]))
+    document.dispatchEvent(EVENTS.COLLISION());
 
   for (const [idx, _player] of _players.entries()) {
-    if (_lasers.some((_laser) => _laser.intersects(_player))) {
-      document.dispatchEvent(EVENTS.DEATH({ player: idx }))
+    if (_lasers.some(_laser => _laser.intersects(_player))) {
+      document.dispatchEvent(EVENTS.DEATH({ player: idx }));
 
       break;
     }
   }
 
   paper.view.draw();
-}
+};
 
-const render = (state) => {
+const render = state => {
   document.getElementById('player-0-deaths').innerHTML = state.deaths[0];
   document.getElementById('player-1-deaths').innerHTML = state.deaths[1];
 
   redraw(state);
-}
+};
 
-module.exports = { render, setup }
+module.exports = { render, setup };
